@@ -180,6 +180,54 @@ if __name__ == "__main__":
 
 ```
 
+### How weight/bias is updated
+In the above code, for each training cycle, we will update the weight and bias to new value.
+```
+w0_new = w0 + learning_rate * error * x0
+bias_new = bias + learning_rate * error
+```
+You may wonder why. It's all because we want to minimize the square of the error. Because error could be positive or negate, we use square of the error. If the square of the error is minimized, we get the appropriate weight and bias.
+
+Suppose we have
+```
+prediction = w0 * x0 + w1 * x1 + w2 * x2 + b
+```
+We will know that
+```
+derivative_of_prediction_over_w0 = x0
+derivative_of_prediction_over_w1 = x1
+derivative_of_prediction_over_b = 0
+...
+```
+
+If the `target` is the actual answer. Then we know the error is
+```
+error = target - prediction
+error_square = error * error = (target - prediction) * (target - prediction)
+
+derivative_of_errorSquare_over_w0 = 2 * (target-prediction) * (-1) * derivative_of_prediction_over_w0
+   = 2* error * (-1) * x0
+```
+
+We could then apply the gradient descent method. If the `derivative_of_errorSquare_over_w0` is positive, we should decrease w0 a little bit. If `derivative_of_errorSquare_over_w0` is negative, we should increase w0 a little bit. Let the `step_size` to be a very small number, such as 0.01, we will have
+
+```
+w0_new = w0 - step_size * derivative_of_errorSquare_over_w0
+
+w0_new = w0 + step_size * 2 * error * x0
+```
+
+If we define
+```
+learning_rate = step_size * 2
+```
+We will have
+```
+w0_new = w0 + learning_rate * error * x0
+```
+
+That's why when we try to find the new weight, we will use the older weight, then plus learning_rate times error and times the input. You could do similar exercise to get the formula to update the bias.
+
 ### Understand Neural Network
 - Continue to watch the "The Coding Train" series of "Neural Netowork" to understand Feed Forward and Back Propagation
 

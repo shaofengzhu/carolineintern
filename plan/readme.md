@@ -897,7 +897,7 @@ plt.show()
 ```
 
 ### Defect Detection
-The code is adapted from "PyTorch Image Segmentation Tutorial with U-NET: everything from scratch baby", https://www.youtube.com/watch?v=IHq1t7NxS8k. We provide our own Dataset to read the data. We also tried to simplify the code.
+The code is adapted from "PyTorch Image Segmentation Tutorial with U-NET: everything from scratch baby", https://www.youtube.com/watch?v=IHq1t7NxS8k. We provide our own Dataset to read the data. We also tried to simplify the code. Please follow the YouTube video to understand how U-NET works. Please also check the author's code at https://github.com/aladdinpersson/Machine-Learning-Collection/tree/master/ML/Pytorch/image_segmentation/semantic_segmentation_unet
 
 Please modify the code inside the main. When we train the model, it will save the model. When we test the model, we load the model from the file.
 

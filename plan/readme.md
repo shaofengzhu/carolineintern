@@ -804,6 +804,11 @@ The real project requires understanding of Convolutional Neural Network.
 
 4. Watch video "PyTorch Image Segmentation Tutorial with U-NET: everything from scratch baby", https://www.youtube.com/watch?v=IHq1t7NxS8k, this is the **most important** one and we will follow the tutorial to finish the project. The author also published the code at the github https://github.com/aladdinpersson/Machine-Learning-Collection/tree/master/ML/Pytorch/image_segmentation/semantic_segmentation_unet. We **do** need to understand most of the core code.
 
+5. We will also use `torch.save()`, `torch.load()`, `model.dict_state()` API to save the model. Those API are explained in the "PyTorch Tutorial 17 - Saving and Loading Models", https://www.youtube.com/watch?v=9L9jEOwRrCg&list=PLqnslRFeH2UrcDBWF5mfPGpqQDSta6VK4&index=17 . Please watch the video to understand how the API will be used.
+
+6. To understand U-Net algorithm, you could watch "U-NET Paper Walkthrough", https://www.youtube.com/watch?v=oLvmLJkmXuc
+
+
 For the project, we will follow the tutorial "PyTorch Image Segmentation Tutorial with U-NET: everything from scratch baby", but modify it based on our training data. We could also simplify it a little bit.
 
 ### Some basic PyTorch and Image APIs
@@ -889,9 +894,54 @@ print(label_image_data.max())
 # show two images
 fig, axarr = plt.subplots(2)
 # show the first image with src_image_data
-axarr[0].imshow(src_image_data)
+axarr[0].imshow(src_image_data, cmap="gray")
 # show the second image with label_image_data
-axarr[1].imshow(label_image_data)
+axarr[1].imshow(label_image_data, cmap="gray")
+plt.show()
+
+```
+
+#### Conv2d
+```python
+import os
+from PIL import Image
+import torch
+import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
+
+current_location = os.path.dirname(__file__)
+train_src_image_folder = os.path.join(current_location, "../dataset/train_val_image_label/train_image_label/srcImg")
+train_label_image_folder = os.path.join(current_location, "../dataset/train_val_image_label/train_image_label/label")
+
+src_image_name = "54b44ab9-17b0-4807-b1ce-b54830dc901e.bmp"
+src_image = Image.open(os.path.join(train_src_image_folder, src_image_name))
+
+src_image_data = np.array(src_image, dtype=np.float32)
+
+src_image_tensor = torch.tensor(src_image_data)
+print(src_image_tensor.shape)
+
+# The data is 2 dimensional, convert it to 4 dimensional. It's because nn.Conv2d requires 4 dimensional data. 
+# the first dimensional is the the index in the batch
+# the second dimensional is channel
+# the third and fourth is the 2D data
+src_image_tensor = torch.unsqueeze(src_image_tensor, dim=0)
+src_image_tensor = torch.unsqueeze(src_image_tensor, dim=0)
+print(src_image_tensor.shape)
+
+
+conv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, stride=1, padding=1)
+conv_result = conv.forward(src_image_tensor)
+print(conv_result.shape)
+
+conv_result_data = conv_result.squeeze().detach().numpy()
+
+fig, axarr = plt.subplots(2)
+# the first is source image
+axarr[0].imshow(src_image_data, cmap="gray")
+# the second is the image after convolutional process
+axarr[1].imshow(conv_result_data, cmap="gray")
 plt.show()
 
 ```
@@ -1199,3 +1249,5 @@ epoch 1, step 340 / 358, loss=0.03037981316447258
 * 
 
 
+## Summary
+Implemneted U-Net Convolutional Neural Networks algorithm using PyTorch to detect product defects. I started by implementing the simplest nenural network, Perceptron, algorithm from scratch using pure Python. I then implemented a neural network with one hidden layer from scratch using pure Python and NumPy to have deep understanding of Feed Forward and Backward Propagation algorithm. The nueral network implementation is trained with MNIST dataset to recognize hand-written digits. With the knowledge gained when implement neural network from scratch, I read a lot of blogs and watched a lot of YouTube video to understand U-Net convolutional neural network algorithm. I implemented U-Net allgorithm using PyTorch, trained with defect image data and use it to detect the defect of product.

@@ -791,7 +791,405 @@ print(src_image_tensor[0])
 ```
 
 ## 6th Week
-- Use the way we learnt from PyTorch to build a model to recognize the defects of a product from the image of the product
+### Convolutional Neural Network
+The real project requires understanding of Convolutional Neural Network. 
+1. Please watch the following video to understand what is "Filter", "Stride" and "Max Pooling". As the code in the following two vides are written in JavaScript, you do **not** need to write code, but try to understand the concept.
+
+- https://www.youtube.com/watch?v=qPKsVAI_W6M&t=940s
+- https://www.youtube.com/watch?v=pRWq_mtuppU
+
+2. Then read the article that explain the concepts. https://towardsdatascience.com/pytorch-basics-how-to-train-your-neural-net-intro-to-cnn-26a14c2ea29 . As you may not have time, you do **not** need to try the code in this article, but please try to understand the concept of "channels", "kernel" or "filter", "stride" and "max pooling"
+
+3. Watch video "PyTorch Tutorial 14 - Convolutional Neural Network (CNN)", https://www.youtube.com/watch?v=pDdP0TFzsoQ&list=PLqnslRFeH2UrcDBWF5mfPGpqQDSta6VK4&index=14. As you may not have time, you do **not** need to try the code there.
+
+4. Watch video "PyTorch Image Segmentation Tutorial with U-NET: everything from scratch baby", https://www.youtube.com/watch?v=IHq1t7NxS8k, this is the **most important** one and we will follow the tutorial to finish the project. The author also published the code at the github https://github.com/aladdinpersson/Machine-Learning-Collection/tree/master/ML/Pytorch/image_segmentation/semantic_segmentation_unet. We **do** need to understand most of the core code.
+
+For the project, we will follow the tutorial "PyTorch Image Segmentation Tutorial with U-NET: everything from scratch baby", but modify it based on our training data. We could also simplify it a little bit.
+
+### Some basic PyTorch and Image APIs
+We will use a few more PyTorch and Image APIs. Please get familar with those APIs
+
+#### squeeze/unsqueeze
+```python
+import torch
+
+# one dimensional array
+a = torch.tensor([1,2,3])
+print(a)
+print(a.shape)
+
+# convert to two dimensional array
+b = torch.unsqueeze(a, dim=0)
+print(b)
+print(b.shape)
+
+# convert to three dimensional array
+c = torch.unsqueeze(b, dim=0)
+print(c)
+print(c.shape)
+
+# convert back to two dimensional array
+d = c.squeeze(dim = 0)
+print(d)
+print(d.shape)
+
+# the squeeze could cause data loss
+e = torch.tensor([[10,20,30],[40,50,60]])
+f = c.squeeze(dim = 0)
+print(f)
+print(f.shape)
+```
+
+
+#### Image API
+```python
+from PIL import Image
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+
+# assume the following directory structure
+# src/a.py
+# dataset/train_val_image_label/train_image_label/srcImg/*.bmp
+# dataset/train_val_image_label/train_image_label/label/*.bmp
+
+# please change path if the directory is not same as the above.
+
+current_location = os.path.dirname(__file__)
+train_src_image_folder = os.path.join(current_location, "../dataset/train_val_image_label/train_image_label/srcImg")
+train_label_image_folder = os.path.join(current_location, "../dataset/train_val_image_label/train_image_label/label")
+
+src_image_name = "54b44ab9-17b0-4807-b1ce-b54830dc901e.bmp"
+
+src_image_full_path = os.path.join(train_src_image_folder, src_image_name)
+print(f"src={src_image_full_path}")
+label_image_full_path = os.path.join(train_label_image_folder, src_image_name)
+print(f"label={label_image_full_path}")
+
+# open image
+src_image = Image.open(src_image_full_path)
+print(src_image.size)
+label_image = Image.open(label_image_full_path)
+print(label_image.size)
+
+# get image data into np.array
+src_image_data = np.array(src_image, dtype=np.float32)
+print(f"src_image_data.shape={src_image_data.shape}")
+print(src_image_data.max())
+# convert to 0 to 1
+src_image_data = src_image_data / 255.0
+
+label_image_data = np.array(label_image, dtype=np.float32)
+print(label_image_data.max())
+# replace all element greater than 0 with value 1.0
+# we only want to use 0 or 1
+label_image_data[label_image_data > 0] = 1.0
+print(label_image_data.max())
+
+# show two images
+fig, axarr = plt.subplots(2)
+# show the first image with src_image_data
+axarr[0].imshow(src_image_data)
+# show the second image with label_image_data
+axarr[1].imshow(label_image_data)
+plt.show()
+
+```
+
+### Defect Detection
+The code is adapted from "PyTorch Image Segmentation Tutorial with U-NET: everything from scratch baby", https://www.youtube.com/watch?v=IHq1t7NxS8k. We provide our own Dataset to read the data. We also tried to simplify the code.
+
+Please modify the code inside the main. When we train the model, it will save the model. When we test the model, we load the model from the file.
+
+```python
+if __name__ == "__main__":
+    # test_UNET()
+    # test_imagedataset()
+    # test_loader()
+    train_model()
+    # test_model()
+```
+
+The following is the full code.
+
+```python
+import torch
+import torch.nn as nn
+from torch.nn.modules.conv import Conv2d
+import torchvision.transforms.functional as TF
+import torchvision.transforms as transforms
+
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+
+import os
+from PIL import Image
+from torch.utils.data import Dataset
+import numpy as np
+import matplotlib.pyplot as plt
+
+# assume the following directory structure
+# src/a.py
+# dataset/train_val_image_label/train_image_label/srcImg/*.bmp
+# dataset/train_val_image_label/train_image_label/label/*.bmp
+
+# please change path if the directory is not same as the above.
+
+current_location = os.path.dirname(__file__)
+train_src_image_folder = os.path.join(current_location, "../dataset/train_val_image_label/train_image_label/srcImg")
+train_label_image_folder = os.path.join(current_location, "../dataset/train_val_image_label/train_image_label/label")
+test_src_image_folder = os.path.join(current_location, "../dataset/train_val_image_label/val_image_label/srcImg")
+test_label_image_folder = os.path.join(current_location, "../dataset/train_val_image_label/val_image_label/val_label")
+
+batch_size = 2
+image_width = 716 // 4
+image_height = 920 // 4
+learning_rate = 0.001
+num_epochs = 2
+
+class ImageDataset(Dataset):
+    def __init__(self, src_image_folder, label_image_folder, transform = None):
+        super(ImageDataset, self).__init__()
+        self.src_image_folder = src_image_folder
+        self.label_image_folder = label_image_folder
+        self.transform = transform
+        self.src_img_names = os.listdir(src_image_folder)
+
+    def __len__(self):
+        return len(self.src_img_names)
+
+    def __getitem__(self, index):
+        src_img_loc = os.path.join(self.src_image_folder, self.src_img_names[index])
+        src_image = Image.open(src_img_loc)
+        # src_image = src_image.resize((image_width, image_height), Image.NEAREST)
+        src_image_data = np.array(src_image, dtype=np.float32)
+        src_image_data = src_image_data / 255.0
+        # src_image_data = torch.tensor(src_image_data, dtype=torch.float32)
+
+
+        label_img_loc = os.path.join(self.label_image_folder, self.src_img_names[index])
+        label_image = Image.open(label_img_loc)
+        # label_image = label_image.resize((image_width, image_height), Image.NEAREST)
+        label_image_data = np.array(label_image, dtype=np.float32)
+        label_image_data[label_image_data > 0] = 1.0
+        # label_image_data = torch.tensor(label_image_data, dtype=torch.float32)
+
+        if self.transform is not None:
+            augmentations = self.transform(image=src_image_data, mask=label_image_data)
+            src_image_data = augmentations["image"]
+            label_image_data = augmentations["mask"]
+
+        return src_image_data, torch.unsqueeze(label_image_data, dim=0)
+
+
+class DoubleConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(DoubleConv, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.conv(x)
+
+class UNET(nn.Module):
+    def __init__(self, in_channels = 1, out_channels = 1, features = [64, 128, 256, 512]):
+        super(UNET, self).__init__()
+        self.ups = nn.ModuleList()
+        self.downs = nn.ModuleList()
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # Down part of UNET
+        channels = in_channels
+        for feature in features:
+            self.downs.append(DoubleConv(channels, feature))
+            channels = feature
+        
+        # Up part of UNET
+        for feature in reversed(features):
+            self.ups.append(nn.ConvTranspose2d(feature*2, feature, kernel_size=2, stride=2))
+            self.ups.append(DoubleConv(feature*2, feature))
+
+        self.bottleneck = DoubleConv(features[-1], features[-1] * 2)
+        self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
+
+    def forward(self, x):
+        skip_connections = []
+        for down in self.downs:
+            x = down(x)
+            skip_connections.append(x)
+            x = self.pool(x)
+        
+        x = self.bottleneck(x)
+        skip_connections = skip_connections[:: -1]
+
+        for idx in range(0, len(self.ups), 2):
+            x = self.ups[idx](x)
+            skip_connection = skip_connections[idx // 2]
+            if x.shape != skip_connection.shape:
+                x = TF.resize(x, size=skip_connection.shape[2:])
+
+            concat_skip = torch.cat((skip_connection, x), dim = 1)
+            x = self.ups[idx+1](concat_skip)
+        return self.final_conv(x)
+
+image_transform = A.Compose(
+        [
+            A.Resize(height=image_height, width=image_width),
+            ToTensorV2(),
+        ],
+    )
+
+
+def test_imagedataset():
+    dataset = ImageDataset(train_src_image_folder, train_label_image_folder, image_transform)
+    src_image, label_image = dataset[10]
+    print(src_image)
+    print(src_image.shape)
+    print(label_image)
+    print(label_image.shape)
+    plt.imshow(src_image.squeeze(0), cmap = "gray")
+    plt.show()
+    plt.imshow(label_image.squeeze(0), cmap="gray")
+    plt.show()
+
+def test_UNET():
+    x = torch.randn((2, 1, 920, 716))
+    model = UNET(in_channels=1, out_channels=1)
+    preds = model(x)
+    print(preds.shape)
+
+    x = torch.randn((1, 920, 716))
+    x = torch.unsqueeze(x, dim=0)
+    preds = model(x)
+    print(preds.shape)
+
+def test_loader():
+    train_dataset = ImageDataset(train_src_image_folder, train_label_image_folder, image_transform)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+    examples = iter(train_loader)
+    samples, labels = examples.next()
+    print(samples.shape, labels.shape)
+
+
+def train_model():
+
+    train_dataset = ImageDataset(train_src_image_folder, train_label_image_folder, image_transform)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+
+    model = UNET(in_channels=1, out_channels=1)
+
+
+    # loss and optimizer
+    criterion = nn.BCEWithLogitsLoss()
+    # use Adam optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)
+
+    # training loop
+    n_total_steps = len(train_loader)
+    for epoch in range(num_epochs):
+        for batch_index, (images, labels) in enumerate(train_loader):        
+            # forward
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            #backwards
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            if batch_index % 20 == 0:
+                print(f"epoch {epoch}, step {batch_index} / {n_total_steps}, loss={loss}")
+
+            # During test, we could break earlier
+            # if batch_index > 40:
+            #     break
+
+    torch.save(model.state_dict(), os.path.join(current_location, "saved.pth"))
+
+
+def test_model():
+    test_dataset = ImageDataset(test_src_image_folder, test_label_image_folder, image_transform)
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, shuffle=False)
+
+    model = UNET(in_channels=1, out_channels=1)
+    model.load_state_dict(torch.load(os.path.join(current_location, "saved.pth")))
+    model.eval()
+    with torch.no_grad():
+        target_index = 20
+        index = 0
+        for images, labels in test_loader:
+            if index == target_index:
+                outputs = model(images)
+                outputs = torch.sigmoid(outputs)
+                outputs = (outputs > 0.5).float()
+                print(outputs.shape)
+                print(outputs)
+
+                f, axarr = plt.subplots(2,2)
+                axarr[0,0].imshow(images.squeeze(0).squeeze(0), cmap = "gray")
+                axarr[1,0].imshow(labels.squeeze(0).squeeze(0), cmap = "gray")
+                axarr[1,1].imshow(outputs.squeeze(0).squeeze(0), cmap = "gray")
+                plt.show()
+
+
+            index += 1
+
+
+
+
+if __name__ == "__main__":
+    # test_UNET()
+    # test_imagedataset()
+    # test_loader()
+    train_model()
+    # test_model()
+
+```
+
+During the training, you may notice that the loss get smaller and smaller, but has fluctuation.
+```text
+epoch 0, step 0 / 358, loss=0.7198129892349243
+epoch 0, step 20 / 358, loss=0.28176361322402954
+epoch 0, step 40 / 358, loss=0.18625952303409576
+epoch 0, step 60 / 358, loss=0.12518161535263062
+epoch 0, step 80 / 358, loss=0.09668765962123871
+epoch 0, step 100 / 358, loss=0.08442027866840363
+epoch 0, step 120 / 358, loss=0.06081239879131317
+epoch 0, step 140 / 358, loss=0.0702969953417778
+epoch 0, step 160 / 358, loss=0.04157618060708046
+epoch 0, step 180 / 358, loss=0.034358784556388855
+epoch 0, step 200 / 358, loss=0.040915440768003464
+epoch 0, step 220 / 358, loss=0.027041830122470856
+epoch 0, step 240 / 358, loss=0.018930351361632347
+epoch 0, step 260 / 358, loss=0.02023766189813614
+epoch 0, step 280 / 358, loss=0.021855659782886505
+epoch 0, step 300 / 358, loss=0.027157608419656754
+epoch 0, step 320 / 358, loss=0.01193985715508461
+epoch 0, step 340 / 358, loss=0.01688408851623535
+epoch 1, step 0 / 358, loss=0.030533963814377785
+epoch 1, step 20 / 358, loss=0.017918717116117477
+epoch 1, step 40 / 358, loss=0.03703705221414566
+epoch 1, step 60 / 358, loss=0.013068962842226028
+epoch 1, step 80 / 358, loss=0.013278307393193245
+epoch 1, step 100 / 358, loss=0.008637825958430767
+epoch 1, step 120 / 358, loss=0.010797485709190369
+epoch 1, step 140 / 358, loss=0.007710881065577269
+epoch 1, step 160 / 358, loss=0.007644436322152615
+epoch 1, step 180 / 358, loss=0.015620463527739048
+epoch 1, step 200 / 358, loss=0.013507158495485783
+epoch 1, step 220 / 358, loss=0.0266572292894125
+epoch 1, step 240 / 358, loss=0.007559360470622778
+epoch 1, step 260 / 358, loss=0.008456951938569546
+epoch 1, step 280 / 358, loss=0.006380652543157339
+epoch 1, step 300 / 358, loss=0.0073578208684921265
+epoch 1, step 320 / 358, loss=0.009011362679302692
+epoch 1, step 340 / 358, loss=0.03037981316447258
+```
 
 ## 7th Week
 * Document what have been done. Start to write a paper

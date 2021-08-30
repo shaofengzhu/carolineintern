@@ -2158,9 +2158,9 @@ When we use the new code, the following is the accuracy result:
 
 |                       | IoU Accuracy using Testing Data   | IoU Accuracy using Training Data  |
 | ---                   | ---                               | ---                               |
-| BCE (42 epoches)      | 0.35                              | 0.64                              |
-| Dice (20 epoches)     | 0.35                              | 0.58                              |
-| Dice BCE (20 epoches) | 0.33                              | 0.57                              |
+| BCE (42 epoches)      | 0.352                             | 0.638                             |
+| Dice (40 epoches)     | 0.359                             | 0.627                             |
+| Dice BCE (40 epoches) | 0.366                             | 0.697                             |
 
 There are quite a few images in the testing data whose defects were not labeled correctly. It caused the acccuracy to be zero when we calculate the Intersection Over Union accuracy. For example, the testing data at index 386, 396.
 
